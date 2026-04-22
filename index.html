@@ -9,47 +9,48 @@
   <body>
     <main class="game-shell">
       <section class="hud">
-        <div class="badge">
+        <div class="hud-pill">
           <span class="label">分数</span>
           <strong id="score">0</strong>
         </div>
-        <div class="badge">
-          <span class="label">体型</span>
-          <strong id="size">1.0x</strong>
-        </div>
-        <div class="badge">
-          <span class="label">状态</span>
-          <strong id="status">准备开吃</strong>
-        </div>
-        <div class="badge">
-          <span class="label">难度</span>
-          <strong id="difficultyMeter">休闲 · 1级</strong>
-        </div>
-        <div class="badge wide">
-          <span class="label">能力</span>
-          <strong id="powerStatus">无</strong>
+        <div class="hud-pill">
+          <span class="label">档位</span>
+          <strong id="tierDisplay">1 / 5</strong>
         </div>
       </section>
 
       <canvas id="gameCanvas" aria-label="大鱼吃小鱼游戏画布"></canvas>
 
+      <section class="progress-dock">
+        <div class="progress-head">
+          <span id="progressLabel">成长槽</span>
+          <strong id="progressText">0 / 90</strong>
+        </div>
+        <div class="progress-track" aria-hidden="true">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="tier-strip" id="tierDots" aria-label="成长档位">
+          <span class="tier-dot active"></span>
+          <span class="tier-dot"></span>
+          <span class="tier-dot"></span>
+          <span class="tier-dot"></span>
+          <span class="tier-dot"></span>
+        </div>
+      </section>
+
       <section class="panel" id="panel">
         <div class="card">
-          <p class="eyebrow">Python + Web Canvas</p>
+          <div class="panel-icon" id="panelIcon">🐟</div>
+          <p class="eyebrow">Ocean Hunt</p>
           <h1 id="panelTitle">大鱼吃小鱼</h1>
           <p id="panelText">
-            移动鼠标或手指控制你的鱼，先吃小鱼，慢慢长大，再去挑战更大的鱼。
+            吃满底部成长槽才会升到下一档。升满 5 档后，反杀追你的大鲨鱼就能获胜。
           </p>
-          <div class="difficulty-picker" id="difficultyPicker" role="group" aria-label="选择难度">
-            <button type="button" class="difficulty-button active" data-difficulty="easy">休闲</button>
-            <button type="button" class="difficulty-button" data-difficulty="normal">标准</button>
-            <button type="button" class="difficulty-button" data-difficulty="hard">凶险</button>
-          </div>
           <ul class="tips">
-            <li>鼠标或手指控制方向</li>
-            <li>按住鼠标左键冲刺，但会持续消耗自己的体型</li>
-            <li>时间越久，鱼群越密、速度越快，大鱼也会更多</li>
-            <li>后期会刷出更稀有的鱼种，吃到稀有鱼会触发随机特效</li>
+            <li>小沙丁鱼是主粮，吃满成长槽才会真正变大</li>
+            <li>小丑鱼、金枪鱼、河豚和鲨鱼会按你的档位逐步登场</li>
+            <li>随机道具会刷新：磁铁会瞬间清场，盾牌能挡住一次碰撞</li>
+            <li>左键按住可短冲，5 档后吃掉大鲨鱼直接获胜</li>
           </ul>
           <div class="actions">
             <button id="startButton" type="button">开始游戏</button>
