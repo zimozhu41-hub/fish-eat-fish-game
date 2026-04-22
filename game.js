@@ -956,6 +956,9 @@ function levelUpPlayer() {
   emitBurst(state.player.x, state.player.y, state.player.size * 1.3, next.burst);
   emitBubbles(state.player.x, state.player.y, 14, `${next.colors[0]}dd`);
   emitToast(state.player.x, state.player.y - state.player.size, `进化到 ${state.player.tier} 档`, "#fff6c9");
+  if (state.player.tier >= 5) {
+    showWarning("去吃掉鲨鱼吧", 2.8);
+  }
   playLevelUpSound();
   updateHud();
 }
