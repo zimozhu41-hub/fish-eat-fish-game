@@ -230,6 +230,8 @@ const audio = {
   boostLastTone: 0,
 };
 
+let animationFrameId = 0;
+
 function resizeCanvas() {
   state.width = window.innerWidth;
   state.height = window.innerHeight;
@@ -1165,7 +1167,14 @@ function drawParticles() {
   }
 }
 
+function ensureAnimationLoop() {
+  if (!animationFrameId) {
+    animationFrameId = requestAnimationFrame(frame);
+  }
+}
+
 function frame(now) {
+  animationFrameId = 0;
   const dt = Math.min((now - state.lastTime) / 1000 || 0, 0.033);
   state.lastTime = now;
 
@@ -1189,7 +1198,14 @@ function frame(now) {
 
   drawParticles();
 
-  requestAnimationFrame(frame);
+  ensureAnimationLoop();
+}
+
+function resumeAfterPageRestore() {
+  state.lastTime = performance.now();
+  resizeCanvas();
+  updateHud();
+  ensureAnimationLoop();
 }
 
 function setPointerPosition(clientX, clientY) {
@@ -1199,6 +1215,13 @@ function setPointerPosition(clientX, clientY) {
 }
 
 window.addEventListener("resize", resizeCanvas);
+window.addEventListener("pageshow", resumeAfterPageRestore);
+window.addEventListener("focus", resumeAfterPageRestore);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    resumeAfterPageRestore();
+  }
+});
 
 canvas.addEventListener("pointermove", (event) => {
   setPointerPosition(event.clientX, event.clientY);
@@ -1250,4 +1273,4 @@ restartButton.addEventListener("click", startGame);
 setDifficulty("easy");
 resetGame();
 resizeCanvas();
-requestAnimationFrame(frame);
+ensureAnimationLoop();
