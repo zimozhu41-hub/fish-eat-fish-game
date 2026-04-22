@@ -23,43 +23,43 @@ const TIERS = [
   {
     label: "1 / 5",
     size: 26,
-    speed: 390,
+    speed: 405,
     zoom: 1,
-    goal: 90,
+    goal: 105,
     colors: ["#ffd166", "#f77f00"],
     burst: ["#fff1a6", "#ffd166", "#ff8c42"],
   },
   {
     label: "2 / 5",
     size: 34,
-    speed: 410,
+    speed: 390,
     zoom: 0.82,
-    goal: 125,
+    goal: 150,
     colors: ["#92f67c", "#1ba46c"],
     burst: ["#dfffd0", "#92f67c", "#35c37d"],
   },
   {
     label: "3 / 5",
     size: 44,
-    speed: 430,
+    speed: 374,
     zoom: 0.68,
-    goal: 165,
+    goal: 220,
     colors: ["#8ad7ff", "#177dd2"],
     burst: ["#eef9ff", "#8ad7ff", "#43a3ff"],
   },
   {
     label: "4 / 5",
     size: 56,
-    speed: 448,
+    speed: 352,
     zoom: 0.56,
-    goal: 220,
+    goal: 340,
     colors: ["#d8b4fe", "#7c3aed"],
     burst: ["#f8edff", "#d8b4fe", "#9f67ff"],
   },
   {
     label: "5 / 5",
     size: 72,
-    speed: 468,
+    speed: 328,
     zoom: 0.46,
     goal: 0,
     colors: ["#ffafcc", "#d6336c"],
@@ -94,9 +94,9 @@ const FISH_TYPES = {
   },
   puffer: {
     label: "河豚",
-    size: 17,
+    size: 18,
     edibleTier: 2,
-    growth: -26,
+    growth: -95,
     score: -6,
     speedMin: 44,
     speedMax: 66,
@@ -118,13 +118,13 @@ const FISH_TYPES = {
   },
   shark: {
     label: "大鲨鱼",
-    size: 62,
+    size: 68,
     edibleTier: 5,
     growth: 0,
     score: 200,
-    speedMin: 154,
-    speedMax: 182,
-    turnRate: 2.3,
+    speedMin: 196,
+    speedMax: 226,
+    turnRate: 2.7,
     colors: ["#d7e6ef", "#597181"],
     body: "shark",
   },
@@ -160,6 +160,8 @@ const state = {
   spawnTimer: 0,
   itemTimer: 10,
   nextFishId: 1,
+  warningTimer: 0,
+  warningText: "",
 };
 
 const audio = {
@@ -262,6 +264,13 @@ function playMagnetSound() {
   playTone({ frequency: 260, slideTo: 780, duration: 0.22, type: "sawtooth", volume: 0.11 });
 }
 
+function playSharkAlertSound() {
+  ensureAudio();
+  playTone({ frequency: 180, slideTo: 240, duration: 0.16, type: "square", volume: 0.13 });
+  playTone({ frequency: 260, slideTo: 180, duration: 0.16, type: "square", volume: 0.11 });
+  playTone({ frequency: 180, slideTo: 240, duration: 0.16, type: "square", volume: 0.13 });
+}
+
 function playGameOverSound() {
   ensureAudio();
   playTone({ frequency: 210, slideTo: 90, duration: 0.4, type: "sawtooth", volume: 0.16 });
@@ -311,11 +320,24 @@ function createPlayer() {
     colors: tierConfig.colors.slice(),
     progress: 0,
     shield: 0,
+    magnetTimer: 0,
     slowTimer: 0,
     slowPulse: 0,
     levelFlash: 0,
     magnetFlash: 0,
   };
+}
+
+function applyPlayerTierVisuals() {
+  const tierConfig = getTierConfig(state.player.tier);
+  state.player.size = tierConfig.size;
+  state.player.colors = tierConfig.colors.slice();
+}
+
+function showWarning(text, duration = 2.8) {
+  state.warningText = text;
+  state.warningTimer = duration;
+  playSharkAlertSound();
 }
 
 function getSpawnMinDistance(kind) {
@@ -462,7 +484,7 @@ function updateHud() {
     progressFillEl.style.width = "100%";
   }
 
-  progressLabelEl.textContent = player.shield > 0 ? "成长槽 · 护盾待命" : "成长槽";
+  progressLabelEl.textContent = "成长槽";
   progressFillEl.style.background = `linear-gradient(135deg, ${tierConfig.colors[0]} 0%, ${tierConfig.colors[1]} 100%)`;
   progressFillEl.style.boxShadow = `0 0 18px ${tierConfig.colors[0]}55`;
 
@@ -591,6 +613,10 @@ function fillInitialPopulation() {
   for (let i = 0; i < 8; i += 1) {
     spawnSardineSchool();
   }
+
+  for (let i = 0; i < 2; i += 1) {
+    state.fish.push(createFish("puffer"));
+  }
 }
 
 function countByKind(kind) {
@@ -603,20 +629,24 @@ function countByKind(kind) {
   return total;
 }
 
-function needsShark() {
-  return state.player.tier >= 4 && countByKind("shark") === 0;
+function desiredSharkCount() {
+  return state.player.tier >= 3 ? 2 : 0;
 }
 
 function spawnNeededEntities() {
   const tier = state.player.tier;
+  const currentSharks = countByKind("shark");
+  const targetSharks = desiredSharkCount();
 
-  if (needsShark()) {
+  if (currentSharks < targetSharks) {
+    const side = currentSharks % 2 === 0 ? 1 : -1;
     const shark = createFish(
       "shark",
-      clamp(state.player.x + randomBetween(920, 1220) * (Math.random() > 0.5 ? 1 : -1), 220, WORLD.width - 220),
-      clamp(state.player.y + randomBetween(-360, 360), 220, WORLD.height - 220),
+      clamp(state.player.x + randomBetween(980, 1280) * side, 220, WORLD.width - 220),
+      clamp(state.player.y + randomBetween(-420, 420), 220, WORLD.height - 220),
     );
     state.fish.push(shark);
+    showWarning(currentSharks === 0 ? "警报：双鲨鱼进入海域" : "第二条鲨鱼正在逼近");
     return;
   }
 
@@ -630,7 +660,7 @@ function spawnNeededEntities() {
     return;
   }
 
-  if (tier >= 2 && countByKind("puffer") < 3 + Math.max(0, tier - 2)) {
+  if (countByKind("puffer") < 4 + Math.max(0, tier - 1)) {
     state.fish.push(createFish("puffer"));
     return;
   }
@@ -659,7 +689,28 @@ function gainGrowth(amount) {
   }
 
   if (amount < 0) {
-    state.player.progress = Math.max(0, state.player.progress + amount);
+    let remainingLoss = -amount;
+
+    while (remainingLoss > 0) {
+      if (state.player.progress >= remainingLoss) {
+        state.player.progress -= remainingLoss;
+        remainingLoss = 0;
+        break;
+      }
+
+      remainingLoss -= state.player.progress;
+      if (state.player.tier === 1) {
+        state.player.progress = 0;
+        break;
+      }
+
+      state.player.tier -= 1;
+      applyPlayerTierVisuals();
+      state.player.progress = getTierConfig().goal;
+      state.player.levelFlash = 0.45;
+      emitToast(state.player.x, state.player.y - state.player.size, `跌回 ${state.player.tier} 档`, "#ffd8a8");
+    }
+
     updateHud();
     return;
   }
@@ -690,12 +741,10 @@ function levelUpPlayer() {
     return;
   }
 
-  const carry = Math.max(0, state.player.progress - getTierConfig().goal);
   state.player.tier += 1;
+  state.player.progress = 0;
   const next = getTierConfig();
-  state.player.progress = carry;
-  state.player.size = next.size;
-  state.player.colors = next.colors.slice();
+  applyPlayerTierVisuals();
   state.player.levelFlash = 0.85;
   emitBurst(state.player.x, state.player.y, state.player.size * 1.3, next.burst);
   emitBubbles(state.player.x, state.player.y, 14, `${next.colors[0]}dd`);
@@ -759,18 +808,10 @@ function useShield(fish) {
 }
 
 function activateMagnet() {
-  let eaten = 0;
-  for (const fish of state.fish) {
-    if (fish.removed || fish.kind === "shark" || fish.kind === "puffer") {
-      continue;
-    }
-    consumeFish(fish, { force: true });
-    eaten += 1;
-  }
-
-  state.player.magnetFlash = 0.6;
-  emitBurst(state.player.x, state.player.y, state.player.size * 2, ["#fff0a7", "#ffd166", "#ff8f42"]);
-  emitToast(state.player.x, state.player.y - state.player.size, `磁铁清场 ${eaten} 条鱼`, "#fff1a6");
+  state.player.magnetTimer = 5;
+  state.player.magnetFlash = 0.85;
+  emitBurst(state.player.x, state.player.y, state.player.size * 1.8, ["#fff0a7", "#ffd166", "#ff8f42"]);
+  emitToast(state.player.x, state.player.y - state.player.size, "吸铁石生效 5 秒", "#fff1a6");
   playMagnetSound();
 }
 
@@ -801,7 +842,7 @@ function updatePlayer(dt) {
   const distance = Math.hypot(dx, dy) || 1;
   const directionX = dx / distance;
   const directionY = dy / distance;
-  let speed = tier.speed * (state.input.boosting ? 1.28 : 1);
+  let speed = tier.speed * (state.input.boosting ? 1.24 : 1);
 
   if (player.slowTimer > 0) {
     player.slowTimer = Math.max(0, player.slowTimer - dt);
@@ -816,7 +857,8 @@ function updatePlayer(dt) {
 
   player.levelFlash = Math.max(0, player.levelFlash - dt);
   player.slowPulse = Math.max(0, player.slowPulse - dt);
-  player.magnetFlash = Math.max(0, player.magnetFlash - dt);
+  player.magnetTimer = Math.max(0, player.magnetTimer - dt);
+  player.magnetFlash = Math.max(0, player.magnetFlash - dt * (player.magnetTimer > 0 ? 0.35 : 1));
 }
 
 function chooseWanderAngle(fish, playerDistance) {
@@ -842,7 +884,49 @@ function chooseWanderAngle(fish, playerDistance) {
     return fish.angle + randomBetween(-0.08, 0.08);
   }
 
-  return Math.atan2(state.player.y - fish.y, state.player.x - fish.x);
+  const playerSpeed = Math.hypot(state.player.vx, state.player.vy) || 1;
+  const leadFactor = clamp(playerDistance / 360, 0.55, 1.45);
+  const perpendicularX = -state.player.vy / playerSpeed;
+  const perpendicularY = state.player.vx / playerSpeed;
+  const interceptOffset = (fish.id % 2 === 0 ? 1 : -1) * Math.min(180, 70 + playerDistance * 0.18);
+  const targetX = state.player.x + state.player.vx * leadFactor + perpendicularX * interceptOffset;
+  const targetY = state.player.y + state.player.vy * leadFactor + perpendicularY * interceptOffset;
+  return Math.atan2(targetY - fish.y, targetX - fish.x) + randomBetween(-0.04, 0.04);
+}
+
+function getPlayerCollisionRadius() {
+  return state.player.size * 0.98;
+}
+
+function getFishCollisionRadius(fish) {
+  if (fish.kind === "sardine") {
+    return fish.size * 0.9;
+  }
+  if (fish.kind === "puffer") {
+    return fish.size * fish.expand * 0.96;
+  }
+  if (fish.kind === "shark") {
+    return fish.size * 0.88;
+  }
+  return fish.size * fish.expand * 0.84;
+}
+
+function updateMagnetField() {
+  if (state.player.magnetTimer <= 0) {
+    return;
+  }
+
+  const radius = 190 + state.player.tier * 46;
+  for (const fish of state.fish) {
+    if (fish.removed || fish.kind === "shark" || fish.kind === "puffer") {
+      continue;
+    }
+
+    const distance = Math.hypot(fish.x - state.player.x, fish.y - state.player.y);
+    if (distance <= radius) {
+      consumeFish(fish, { force: true });
+    }
+  }
 }
 
 function updateFish(dt) {
@@ -864,6 +948,9 @@ function updateFish(dt) {
         fish.speed = randomBetween(config.speedMin, config.speedMax) * 1.16;
         fish.dashTimer = randomBetween(1.3, 2.8);
       }
+    } else if (fish.kind === "shark") {
+      const rushFactor = distanceToPlayer < 360 ? 1.08 : 1;
+      fish.speed = lerp(fish.speed, randomBetween(config.speedMin, config.speedMax) * rushFactor, dt * 1.1);
     } else if (fish.kind !== "shark") {
       fish.speed = lerp(fish.speed, randomBetween(config.speedMin, config.speedMax), dt * 0.35);
     }
@@ -900,9 +987,9 @@ function updateFish(dt) {
       fish.angle = Math.atan2(fish.vy, fish.vx);
     }
 
-    const fishRadius = fish.size * fish.expand;
-    const collisionDistance = state.player.size * 0.74 + fishRadius * 0.72;
-    if (distanceToPlayer < collisionDistance) {
+    const updatedDistance = Math.hypot(fish.x - state.player.x, fish.y - state.player.y);
+    const collisionDistance = getPlayerCollisionRadius() + getFishCollisionRadius(fish);
+    if (updatedDistance < collisionDistance) {
       if (playerCanEat(fish.kind)) {
         consumeFish(fish);
       } else if (!useShield(fish)) {
@@ -965,6 +1052,8 @@ function updateParticles(dt) {
       state.particles.splice(i, 1);
     }
   }
+
+  state.warningTimer = Math.max(0, state.warningTimer - dt);
 }
 
 function updateCamera(dt) {
@@ -985,10 +1074,12 @@ function worldToScreen(x, y) {
 }
 
 function drawBackground() {
+  const time = state.lastTime * 0.00018;
   const gradient = ctx.createLinearGradient(0, 0, 0, state.height);
-  gradient.addColorStop(0, "#aeeaff");
-  gradient.addColorStop(0.42, "#33a3d7");
-  gradient.addColorStop(1, "#0a3e67");
+  gradient.addColorStop(0, "#c4f0ff");
+  gradient.addColorStop(0.26, "#69c8eb");
+  gradient.addColorStop(0.58, "#1572ad");
+  gradient.addColorStop(1, "#072f55");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, state.width, state.height);
 
@@ -998,8 +1089,46 @@ function drawBackground() {
   ctx.fillStyle = light;
   ctx.fillRect(0, 0, state.width, state.height);
 
+  for (let i = 0; i < 4; i += 1) {
+    const beamX = state.width * (0.12 + i * 0.24) + Math.sin(time * 4 + i) * 40;
+    const beamWidth = 140 + i * 24;
+    const beam = ctx.createLinearGradient(beamX, 0, beamX + beamWidth, state.height * 0.85);
+    beam.addColorStop(0, "rgba(255,255,255,0.16)");
+    beam.addColorStop(0.55, "rgba(255,255,255,0.03)");
+    beam.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = beam;
+    ctx.beginPath();
+    ctx.moveTo(beamX, 0);
+    ctx.lineTo(beamX + beamWidth, 0);
+    ctx.lineTo(beamX + beamWidth * 0.4, state.height);
+    ctx.lineTo(beamX - beamWidth * 0.6, state.height);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  for (let i = 0; i < 5; i += 1) {
+    ctx.fillStyle = `rgba(255,255,255,${0.035 + i * 0.01})`;
+    ctx.beginPath();
+    ctx.ellipse(
+      state.width * (0.15 + i * 0.19) + Math.sin(time * 3 + i * 1.2) * 70,
+      state.height * (0.22 + (i % 2) * 0.11),
+      220 + i * 25,
+      28 + i * 4,
+      Math.sin(time + i) * 0.2,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+  }
+
+  const seabed = ctx.createLinearGradient(0, state.height * 0.72, 0, state.height);
+  seabed.addColorStop(0, "rgba(255, 220, 160, 0)");
+  seabed.addColorStop(1, "rgba(255, 205, 138, 0.12)");
+  ctx.fillStyle = seabed;
+  ctx.fillRect(0, state.height * 0.72, state.width, state.height * 0.28);
+
   const gridSize = 220;
-  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let x = 0; x <= WORLD.width; x += gridSize) {
@@ -1126,13 +1255,35 @@ function drawFishBody(kind, size, sway, colors) {
     ctx.beginPath();
     ctx.ellipse(0, 0, size * 1.45, size * 0.74, 0, 0, Math.PI * 2);
     ctx.fill();
-    drawTail(size, sway, 1.95);
     ctx.beginPath();
-    ctx.moveTo(-size * 0.12, -size * 1.16);
-    ctx.lineTo(size * 0.28, -size * 0.12);
-    ctx.lineTo(-size * 0.22, -size * 0.02);
+    ctx.moveTo(-size * 1.1, 0);
+    ctx.lineTo(-size * 2.02, -size * 0.58 + sway);
+    ctx.lineTo(-size * 1.6, 0);
+    ctx.lineTo(-size * 2.02, size * 0.58 - sway);
     ctx.closePath();
     ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.18, -size * 1.18);
+    ctx.lineTo(size * 0.16, -size * 0.18);
+    ctx.lineTo(-size * 0.34, -size * 0.08);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(size * 0.08, size * 0.16);
+    ctx.lineTo(size * 0.56, size * 0.7);
+    ctx.lineTo(size * 0.02, size * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "rgba(20, 31, 39, 0.35)";
+    ctx.fillRect(size * 0.24, size * 0.24, size * 0.62, size * 0.08);
+    for (let i = 0; i < 3; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(size * (0.02 + i * 0.16), -size * 0.12);
+      ctx.lineTo(size * (-0.18 + i * 0.16), size * 0.24);
+      ctx.strokeStyle = "rgba(20, 31, 39, 0.24)";
+      ctx.lineWidth = Math.max(1, size * 0.05);
+      ctx.stroke();
+    }
   }
 }
 
@@ -1185,6 +1336,16 @@ function drawEntityFish(fish, isPlayer = false) {
     ctx.beginPath();
     ctx.arc(0, 0, size * 1.1, 0, Math.PI * 2);
     ctx.stroke();
+  }
+
+  if (isPlayer && state.player.magnetTimer > 0) {
+    ctx.strokeStyle = "rgba(255, 214, 102, 0.82)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.arc(0, 0, (190 + state.player.tier * 46) * state.camera.zoom, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
   ctx.restore();
@@ -1277,6 +1438,24 @@ function drawScreenEffects() {
     ctx.fillStyle = `rgba(255, 255, 255, ${state.player.levelFlash * 0.08})`;
     ctx.fillRect(0, 0, state.width, state.height);
   }
+
+  if (state.warningTimer > 0) {
+    const alpha = Math.min(0.95, state.warningTimer * 0.5);
+    ctx.save();
+    ctx.translate(state.width * 0.5, 54);
+    ctx.fillStyle = `rgba(120, 18, 18, ${0.52 * alpha})`;
+    ctx.strokeStyle = `rgba(255, 173, 173, ${0.9 * alpha})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(-210, -24, 420, 48, 18);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#fff4d6";
+    ctx.font = "700 20px Trebuchet MS";
+    ctx.textAlign = "center";
+    ctx.fillText(state.warningText, 0, 7);
+    ctx.restore();
+  }
 }
 
 function ensureAnimationLoop() {
@@ -1300,6 +1479,7 @@ function frame(now) {
 
   if (state.running) {
     updatePlayer(dt);
+    updateMagnetField();
     updateFish(dt);
     updateItems(dt);
     updateSpawn(dt);
