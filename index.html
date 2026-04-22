@@ -13,10 +13,6 @@
           <span class="label">分数</span>
           <strong id="score">0</strong>
         </div>
-        <div class="hud-pill">
-          <span class="label">档位</span>
-          <strong id="tierDisplay">1 / 5</strong>
-        </div>
       </section>
 
       <canvas id="gameCanvas" aria-label="大鱼吃小鱼游戏画布"></canvas>
@@ -41,17 +37,8 @@
       <section class="panel" id="panel">
         <div class="card">
           <div class="panel-icon" id="panelIcon">🐟</div>
-          <p class="eyebrow">Ocean Hunt</p>
           <h1 id="panelTitle">大鱼吃小鱼</h1>
-          <p id="panelText">
-            吃满底部成长槽才会升到下一档。3 档开始会有双鲨鱼追击，撑到 5 档后反杀任意一条鲨鱼就能获胜。
-          </p>
-          <ul class="tips">
-            <li>小沙丁鱼是主粮，吃满成长槽才会真正变大</li>
-            <li>河豚会持续刷新，硬吃会减速、扣成长，严重时会直接掉档</li>
-            <li>随机道具会刷新：磁铁持续 5 秒吞掉身边的普通鱼，盾牌能挡住一次碰撞</li>
-            <li>左键按住可短冲，3 档后会出现双鲨鱼包夹，5 档后吃掉鲨鱼直接获胜</li>
-          </ul>
+          <p id="panelText"></p>
           <div class="actions">
             <button id="startButton" type="button">开始游戏</button>
             <button id="restartButton" type="button" class="ghost">重新开始</button>

@@ -2,7 +2,6 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 const scoreEl = document.getElementById("score");
-const tierEl = document.getElementById("tierDisplay");
 const progressLabelEl = document.getElementById("progressLabel");
 const progressTextEl = document.getElementById("progressText");
 const progressFillEl = document.getElementById("progressFill");
@@ -161,6 +160,7 @@ const state = {
   itemTimer: 10,
   nextFishId: 1,
   warningTimer: 0,
+  warningFlashTimer: 0,
   warningText: "",
 };
 
@@ -296,13 +296,22 @@ function resizeCanvas() {
 
 function createDecorations() {
   state.decorations = [];
-  for (let i = 0; i < 24; i += 1) {
+  for (let i = 0; i < 34; i += 1) {
+    const kind = i % 4 === 0 ? "rock" : i % 4 === 1 ? "coral" : "reef";
+    const size = kind === "rock" ? randomBetween(42, 92) : kind === "coral" ? randomBetween(34, 76) : randomBetween(30, 66);
     state.decorations.push({
-      kind: i % 3 === 0 ? "rock" : "reef",
-      x: randomBetween(140, WORLD.width - 140),
-      y: randomBetween(220, WORLD.height - 160),
-      size: randomBetween(26, 68),
-      hue: i % 2 === 0 ? "rgba(255, 244, 199, 0.18)" : "rgba(102, 248, 203, 0.15)",
+      kind,
+      x: randomBetween(180, WORLD.width - 180),
+      y: randomBetween(260, WORLD.height - 150),
+      size,
+      solid: kind !== "reef",
+      radius: kind === "rock" ? size * 0.82 : size * 0.56,
+      hue:
+        kind === "rock"
+          ? "rgba(142, 162, 176, 0.22)"
+          : kind === "coral"
+            ? "rgba(255, 176, 147, 0.24)"
+            : "rgba(102, 248, 203, 0.16)",
     });
   }
 }
@@ -320,6 +329,7 @@ function createPlayer() {
     colors: tierConfig.colors.slice(),
     progress: 0,
     shield: 0,
+    invincibleTimer: 0,
     magnetTimer: 0,
     slowTimer: 0,
     slowPulse: 0,
@@ -334,10 +344,34 @@ function applyPlayerTierVisuals() {
   state.player.colors = tierConfig.colors.slice();
 }
 
-function showWarning(text, duration = 2.8) {
+function showWarning(text, duration = 3) {
   state.warningText = text;
   state.warningTimer = duration;
+  state.warningFlashTimer = duration;
   playSharkAlertSound();
+}
+
+function getPlayerVisualLength() {
+  return state.player.size * 1.56;
+}
+
+function getFishVisualLength(fish) {
+  if (fish.kind === "sardine") {
+    return fish.size * 1.32;
+  }
+  if (fish.kind === "clown") {
+    return fish.size * 1.08;
+  }
+  if (fish.kind === "puffer") {
+    return fish.size * fish.expand * 0.98;
+  }
+  if (fish.kind === "tuna") {
+    return fish.size * 1.56;
+  }
+  if (fish.kind === "shark") {
+    return fish.size * 1.45;
+  }
+  return fish.size;
 }
 
 function getSpawnMinDistance(kind) {
@@ -389,6 +423,28 @@ function findSpawnPosition(minDistance, padding = 140) {
   }
 
   return fallback;
+}
+
+function resolveEntityAgainstDecorations(entity, pushStrength = 1) {
+  for (const deco of state.decorations) {
+    if (!deco.solid) {
+      continue;
+    }
+
+    const dx = entity.x - deco.x;
+    const dy = entity.y - deco.y;
+    const distance = Math.hypot(dx, dy) || 0.0001;
+    const minDistance = deco.radius + entity.size * 0.56;
+    if (distance < minDistance) {
+      const overlap = minDistance - distance;
+      const nx = dx / distance;
+      const ny = dy / distance;
+      entity.x = clamp(entity.x + nx * overlap * pushStrength, entity.size, WORLD.width - entity.size);
+      entity.y = clamp(entity.y + ny * overlap * pushStrength, entity.size, WORLD.height - entity.size);
+      entity.vx *= 0.76;
+      entity.vy *= 0.76;
+    }
+  }
 }
 
 function resetWorld() {
@@ -473,7 +529,6 @@ function updateHud() {
   const tierConfig = getTierConfig();
 
   scoreEl.textContent = state.score;
-  tierEl.textContent = tierConfig.label;
 
   if (player.tier < 5) {
     const ratio = clamp(player.progress / tierConfig.goal, 0, 1);
@@ -679,8 +734,8 @@ function spawnItem() {
   state.items.push(createItem(type));
 }
 
-function playerCanEat(kind) {
-  return state.player.tier >= FISH_TYPES[kind].edibleTier;
+function playerCanEat(fish) {
+  return getPlayerVisualLength() >= getFishVisualLength(fish) * 1.01;
 }
 
 function gainGrowth(amount) {
@@ -790,9 +845,10 @@ function useShield(fish) {
   }
 
   state.player.shield = 0;
+  state.player.invincibleTimer = 1;
   state.player.slowPulse = 0.55;
   emitBurst(state.player.x, state.player.y, state.player.size * 1.45, ["#d7f4ff", "#7ec8ff", "#ffffff"]);
-  emitToast(state.player.x, state.player.y - state.player.size, "护盾挡住了碰撞", "#d7f4ff");
+  emitToast(state.player.x, state.player.y - state.player.size, "护盾触发", "#d7f4ff");
   playShieldSound();
 
   if (fish) {
@@ -854,7 +910,9 @@ function updatePlayer(dt) {
 
   player.x = clamp(player.x + player.vx * dt, player.size, WORLD.width - player.size);
   player.y = clamp(player.y + player.vy * dt, player.size, WORLD.height - player.size);
+  resolveEntityAgainstDecorations(player, 1.08);
 
+  player.invincibleTimer = Math.max(0, player.invincibleTimer - dt);
   player.levelFlash = Math.max(0, player.levelFlash - dt);
   player.slowPulse = Math.max(0, player.slowPulse - dt);
   player.magnetTimer = Math.max(0, player.magnetTimer - dt);
@@ -882,6 +940,14 @@ function chooseWanderAngle(fish, playerDistance) {
       return Math.atan2(fish.y - state.player.y, fish.x - state.player.x) + randomBetween(-0.2, 0.2);
     }
     return fish.angle + randomBetween(-0.08, 0.08);
+  }
+
+  if (state.player.tier >= 5) {
+    const fleeOffset = (fish.id % 2 === 0 ? 1 : -1) * 140;
+    return (
+      Math.atan2(fish.y - state.player.y + fleeOffset, fish.x - state.player.x - fleeOffset * 0.3)
+      + randomBetween(-0.12, 0.12)
+    );
   }
 
   const playerSpeed = Math.hypot(state.player.vx, state.player.vy) || 1;
@@ -949,7 +1015,7 @@ function updateFish(dt) {
         fish.dashTimer = randomBetween(1.3, 2.8);
       }
     } else if (fish.kind === "shark") {
-      const rushFactor = distanceToPlayer < 360 ? 1.08 : 1;
+      const rushFactor = state.player.tier >= 5 ? 1.24 : distanceToPlayer < 360 ? 1.08 : 1;
       fish.speed = lerp(fish.speed, randomBetween(config.speedMin, config.speedMax) * rushFactor, dt * 1.1);
     } else if (fish.kind !== "shark") {
       fish.speed = lerp(fish.speed, randomBetween(config.speedMin, config.speedMax), dt * 0.35);
@@ -975,6 +1041,7 @@ function updateFish(dt) {
     fish.vy = lerp(fish.vy, desiredVy, dt * turnRate);
     fish.x += fish.vx * dt;
     fish.y += fish.vy * dt;
+    resolveEntityAgainstDecorations(fish, fish.kind === "shark" ? 0.75 : 0.55);
 
     if (fish.x < fish.size || fish.x > WORLD.width - fish.size) {
       fish.x = clamp(fish.x, fish.size, WORLD.width - fish.size);
@@ -990,8 +1057,10 @@ function updateFish(dt) {
     const updatedDistance = Math.hypot(fish.x - state.player.x, fish.y - state.player.y);
     const collisionDistance = getPlayerCollisionRadius() + getFishCollisionRadius(fish);
     if (updatedDistance < collisionDistance) {
-      if (playerCanEat(fish.kind)) {
+      if (playerCanEat(fish)) {
         consumeFish(fish);
+      } else if (state.player.invincibleTimer > 0) {
+        continue;
       } else if (!useShield(fish)) {
         gameOver();
         return;
@@ -1054,6 +1123,7 @@ function updateParticles(dt) {
   }
 
   state.warningTimer = Math.max(0, state.warningTimer - dt);
+  state.warningFlashTimer = Math.max(0, state.warningFlashTimer - dt);
 }
 
 function updateCamera(dt) {
@@ -1074,12 +1144,12 @@ function worldToScreen(x, y) {
 }
 
 function drawBackground() {
-  const time = state.lastTime * 0.00018;
+  const time = state.lastTime * 0.00012;
   const gradient = ctx.createLinearGradient(0, 0, 0, state.height);
   gradient.addColorStop(0, "#c4f0ff");
-  gradient.addColorStop(0.26, "#69c8eb");
-  gradient.addColorStop(0.58, "#1572ad");
-  gradient.addColorStop(1, "#072f55");
+  gradient.addColorStop(0.22, "#74cfe8");
+  gradient.addColorStop(0.56, "#1f78a9");
+  gradient.addColorStop(1, "#0a365c");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, state.width, state.height);
 
@@ -1089,32 +1159,15 @@ function drawBackground() {
   ctx.fillStyle = light;
   ctx.fillRect(0, 0, state.width, state.height);
 
-  for (let i = 0; i < 4; i += 1) {
-    const beamX = state.width * (0.12 + i * 0.24) + Math.sin(time * 4 + i) * 40;
-    const beamWidth = 140 + i * 24;
-    const beam = ctx.createLinearGradient(beamX, 0, beamX + beamWidth, state.height * 0.85);
-    beam.addColorStop(0, "rgba(255,255,255,0.16)");
-    beam.addColorStop(0.55, "rgba(255,255,255,0.03)");
-    beam.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = beam;
-    ctx.beginPath();
-    ctx.moveTo(beamX, 0);
-    ctx.lineTo(beamX + beamWidth, 0);
-    ctx.lineTo(beamX + beamWidth * 0.4, state.height);
-    ctx.lineTo(beamX - beamWidth * 0.6, state.height);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  for (let i = 0; i < 5; i += 1) {
-    ctx.fillStyle = `rgba(255,255,255,${0.035 + i * 0.01})`;
+  for (let i = 0; i < 6; i += 1) {
+    ctx.fillStyle = `rgba(255,255,255,${0.03 + i * 0.008})`;
     ctx.beginPath();
     ctx.ellipse(
-      state.width * (0.15 + i * 0.19) + Math.sin(time * 3 + i * 1.2) * 70,
-      state.height * (0.22 + (i % 2) * 0.11),
-      220 + i * 25,
-      28 + i * 4,
-      Math.sin(time + i) * 0.2,
+      state.width * (0.12 + i * 0.16) + Math.sin(time * 2.1 + i) * 36,
+      state.height * (0.16 + (i % 3) * 0.08),
+      160 + i * 18,
+      22 + i * 4,
+      Math.sin(time + i * 0.4) * 0.18,
       0,
       Math.PI * 2,
     );
@@ -1123,7 +1176,7 @@ function drawBackground() {
 
   const seabed = ctx.createLinearGradient(0, state.height * 0.72, 0, state.height);
   seabed.addColorStop(0, "rgba(255, 220, 160, 0)");
-  seabed.addColorStop(1, "rgba(255, 205, 138, 0.12)");
+  seabed.addColorStop(1, "rgba(255, 205, 138, 0.18)");
   ctx.fillStyle = seabed;
   ctx.fillRect(0, state.height * 0.72, state.width, state.height * 0.28);
 
@@ -1163,12 +1216,31 @@ function drawDecorations() {
     ctx.fillStyle = deco.hue;
 
     if (deco.kind === "rock") {
+      ctx.fillStyle = "rgba(113, 135, 150, 0.42)";
       ctx.beginPath();
       ctx.ellipse(0, 0, size * 0.9, size * 0.65, -0.2, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = "rgba(186, 203, 214, 0.18)";
+      ctx.beginPath();
+      ctx.ellipse(-size * 0.18, -size * 0.12, size * 0.26, size * 0.14, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (deco.kind === "coral") {
+      for (let i = -1; i <= 1; i += 1) {
+        ctx.strokeStyle = i === 0 ? "rgba(255, 162, 132, 0.5)" : "rgba(255, 196, 167, 0.34)";
+        ctx.lineWidth = Math.max(3, size * 0.12);
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(i * size * 0.12, size * 0.62);
+        ctx.quadraticCurveTo(i * size * 0.25, size * 0.06, i * size * 0.12, -size * 0.6);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(i * size * 0.08, size * 0.12);
+        ctx.quadraticCurveTo(i * size * 0.34, -size * 0.18, i * size * 0.44, -size * 0.42);
+        ctx.stroke();
+      }
     } else {
       for (let i = -1; i <= 1; i += 1) {
-        ctx.strokeStyle = deco.hue;
+        ctx.strokeStyle = i === 0 ? "rgba(84, 236, 193, 0.26)" : "rgba(84, 236, 193, 0.18)";
         ctx.lineWidth = Math.max(2, size * 0.1);
         ctx.lineCap = "round";
         ctx.beginPath();
@@ -1439,8 +1511,22 @@ function drawScreenEffects() {
     ctx.fillRect(0, 0, state.width, state.height);
   }
 
+  const sharkCount = countByKind("shark");
+  if (sharkCount > 0 && state.warningTimer <= 0) {
+    ctx.fillStyle = "rgba(0, 9, 20, 0.16)";
+    ctx.fillRect(0, 0, state.width, state.height);
+  }
+
   if (state.warningTimer > 0) {
     const alpha = Math.min(0.95, state.warningTimer * 0.5);
+    const flashAlpha = state.warningFlashTimer > 0 ? (Math.sin(state.lastTime * 0.05) * 0.5 + 0.5) * 0.24 : 0;
+    if (flashAlpha > 0) {
+      ctx.fillStyle = `rgba(255, 64, 64, ${flashAlpha})`;
+      ctx.fillRect(0, 0, state.width, state.height);
+      ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha * 0.34})`;
+      ctx.fillRect(0, 0, state.width, state.height);
+    }
+
     ctx.save();
     ctx.translate(state.width * 0.5, 54);
     ctx.fillStyle = `rgba(120, 18, 18, ${0.52 * alpha})`;
@@ -1454,6 +1540,45 @@ function drawScreenEffects() {
     ctx.font = "700 20px Trebuchet MS";
     ctx.textAlign = "center";
     ctx.fillText(state.warningText, 0, 7);
+    ctx.restore();
+  }
+
+  if (state.player.invincibleTimer > 0) {
+    const invincibleAlpha = (Math.sin(state.lastTime * 0.03) * 0.5 + 0.5) * 0.08;
+    ctx.fillStyle = `rgba(210, 244, 255, ${invincibleAlpha})`;
+    ctx.fillRect(0, 0, state.width, state.height);
+  }
+
+  if (state.victory) {
+    const trophyScale = 1 + Math.sin(state.lastTime * 0.01) * 0.04;
+    ctx.save();
+    ctx.translate(state.width * 0.5, state.height * 0.48);
+    ctx.scale(trophyScale, trophyScale);
+    ctx.globalAlpha = 0.24;
+    ctx.fillStyle = "#ffd166";
+    ctx.beginPath();
+    ctx.moveTo(-80, -70);
+    ctx.lineTo(80, -70);
+    ctx.lineTo(56, 16);
+    ctx.lineTo(22, 34);
+    ctx.lineTo(22, 86);
+    ctx.lineTo(64, 104);
+    ctx.lineTo(64, 124);
+    ctx.lineTo(-64, 124);
+    ctx.lineTo(-64, 104);
+    ctx.lineTo(-22, 86);
+    ctx.lineTo(-22, 34);
+    ctx.lineTo(-56, 16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.lineWidth = 12;
+    ctx.strokeStyle = "rgba(255, 232, 166, 0.28)";
+    ctx.beginPath();
+    ctx.arc(-90, -10, 42, Math.PI * 0.55, Math.PI * 1.45, true);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(90, -10, 42, Math.PI * 1.55, Math.PI * 0.45, false);
+    ctx.stroke();
     ctx.restore();
   }
 }
