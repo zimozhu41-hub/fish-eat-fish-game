@@ -1,0 +1,239 @@
+:root {
+  --bg-top: #8ce8ff;
+  --bg-mid: #29a7d9;
+  --bg-bottom: #0a4b78;
+  --panel: rgba(7, 29, 45, 0.74);
+  --panel-border: rgba(255, 255, 255, 0.16);
+  --text: #f8fdff;
+  --muted: rgba(248, 253, 255, 0.75);
+  --accent: #ffcf4d;
+  --accent-2: #ff7d45;
+  --danger: #ff6b6b;
+  --shadow: 0 16px 50px rgba(3, 25, 44, 0.28);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.22), transparent 26%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 40%, var(--bg-bottom) 100%);
+  color: var(--text);
+  overflow: hidden;
+}
+
+body {
+  position: relative;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: auto;
+  border-radius: 50%;
+  filter: blur(10px);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+body::before {
+  width: 26rem;
+  height: 26rem;
+  left: -8rem;
+  top: -8rem;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+body::after {
+  width: 34rem;
+  height: 34rem;
+  right: -10rem;
+  bottom: -14rem;
+  background: rgba(0, 255, 220, 0.12);
+}
+
+.game-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#gameCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+
+.hud {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 3;
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  min-width: 7rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: rgba(8, 33, 51, 0.42);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+}
+
+.label {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.panel {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  background: rgba(0, 26, 43, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.panel.hidden {
+  display: none;
+}
+
+.card {
+  width: min(32rem, 100%);
+  padding: 1.5rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 28px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.eyebrow {
+  margin: 0 0 0.6rem;
+  color: var(--accent);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 3.8rem);
+  line-height: 0.95;
+}
+
+#panelText {
+  margin: 1rem 0 0;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 1.4rem;
+  flex-wrap: wrap;
+}
+
+.difficulty-picker {
+  display: flex;
+  gap: 0.7rem;
+  margin-top: 1.3rem;
+  flex-wrap: wrap;
+}
+
+.difficulty-button {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding-inline: 1rem;
+}
+
+.difficulty-button.active {
+  color: #102738;
+  background: linear-gradient(135deg, var(--accent) 0%, #ffe07a 100%);
+}
+
+.tips {
+  margin: 1rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.7rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.95rem 1.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #102738;
+  background: linear-gradient(135deg, var(--accent) 0%, #ffe07a 100%);
+  cursor: pointer;
+  transition: transform 160ms ease, filter 160ms ease;
+}
+
+button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.04);
+}
+
+button.ghost {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+@media (max-width: 720px) {
+  .hud {
+    right: 1rem;
+  }
+
+  .badge {
+    min-width: calc(50% - 0.5rem);
+    flex: 1 1 9rem;
+  }
+
+  .card {
+    padding: 1.2rem;
+    border-radius: 22px;
+  }
+
+  .difficulty-button {
+    width: 100%;
+  }
+
+  button {
+    width: 100%;
+  }
+}
