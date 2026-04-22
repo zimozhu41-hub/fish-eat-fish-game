@@ -92,6 +92,10 @@ body::after {
   box-shadow: var(--shadow);
 }
 
+.badge.wide {
+  min-width: 9rem;
+}
+
 .label {
   display: block;
   margin-bottom: 0.2rem;
