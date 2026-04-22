@@ -185,6 +185,16 @@ function lerp(from, to, amount) {
   return from + (to - from) * amount;
 }
 
+function shortestAngleDelta(from, to) {
+  let delta = (to - from) % (Math.PI * 2);
+  if (delta > Math.PI) {
+    delta -= Math.PI * 2;
+  } else if (delta < -Math.PI) {
+    delta += Math.PI * 2;
+  }
+  return delta;
+}
+
 function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
@@ -460,6 +470,7 @@ function createPlayer() {
     y: WORLD.height * 0.52,
     vx: 0,
     vy: 0,
+    angle: 0,
     tier,
     size: tierConfig.size,
     colors: tierConfig.colors.slice(),
@@ -842,7 +853,7 @@ function spawnNeededEntities() {
       clamp(state.player.y + randomBetween(-420, 420), 220, WORLD.height - 220),
     );
     state.fish.push(shark);
-    showWarning(currentSharks === 0 ? "警报：双鲨鱼进入海域" : "第二条鲨鱼正在逼近");
+    showWarning("警报：鲨鱼出现");
     return;
   }
 
@@ -1037,8 +1048,11 @@ function updatePlayer(dt) {
   const dx = state.pointer.x - state.width * 0.5;
   const dy = state.pointer.y - state.height * 0.5;
   const distance = Math.hypot(dx, dy) || 1;
-  const directionX = dx / distance;
-  const directionY = dy / distance;
+  const targetAngle = distance > 8 ? Math.atan2(dy, dx) : player.angle;
+  const turnSpeed = state.input.boosting ? 8.5 : 10.5;
+  player.angle += shortestAngleDelta(player.angle, targetAngle) * Math.min(1, dt * turnSpeed);
+
+  const throttle = clamp(distance / Math.min(state.width, state.height) / 0.22, 0.22, 1);
   let speed = tier.speed * (state.input.boosting ? 1.24 : 1);
 
   if (player.slowTimer > 0) {
@@ -1046,8 +1060,10 @@ function updatePlayer(dt) {
     speed *= 0.62;
   }
 
-  player.vx = lerp(player.vx, directionX * speed, dt * 4.2);
-  player.vy = lerp(player.vy, directionY * speed, dt * 4.2);
+  const targetVx = Math.cos(player.angle) * speed * throttle;
+  const targetVy = Math.sin(player.angle) * speed * throttle;
+  player.vx = lerp(player.vx, targetVx, dt * 7.4);
+  player.vy = lerp(player.vy, targetVy, dt * 7.4);
 
   player.x = clamp(player.x + player.vx * dt, player.size, WORLD.width - player.size);
   player.y = clamp(player.y + player.vy * dt, player.size, WORLD.height - player.size);
@@ -1543,7 +1559,7 @@ function drawEntityFish(fish, isPlayer = false) {
   const colors = isPlayer ? state.player.colors : FISH_TYPES[fish.kind].colors;
   const swaySeed = fish.id ?? 0;
   const sway = Math.sin((state.lastTime / 130) + swaySeed) * size * 0.14;
-  const angle = Math.atan2(fish.vy || 0.0001, fish.vx || 0.0001);
+  const angle = isPlayer ? fish.angle : Math.atan2(fish.vy || 0.0001, fish.vx || 0.0001);
 
   ctx.save();
   ctx.translate(screen.x, screen.y);
