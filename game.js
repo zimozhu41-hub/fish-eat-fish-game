@@ -107,11 +107,11 @@ const FISH_TYPES = {
     label: "金枪鱼",
     size: 28,
     edibleTier: 3,
-    growth: 56,
-    score: 24,
-    speedMin: 172,
-    speedMax: 236,
-    turnRate: 1.7,
+    growth: 68,
+    score: 28,
+    speedMin: 188,
+    speedMax: 268,
+    turnRate: 1.34,
     colors: ["#dff7ff", "#4d9cff"],
     body: "tuna",
   },
@@ -167,6 +167,11 @@ const state = {
 const audio = {
   context: null,
   master: null,
+  bgm: {
+    playing: false,
+    step: 0,
+    nextTime: 0,
+  },
 };
 
 let animationFrameId = 0;
@@ -232,6 +237,102 @@ function playTone({ frequency, duration = 0.12, type = "sine", volume = 0.12, sl
   gain.connect(audio.master);
   oscillator.start(now);
   oscillator.stop(now + duration + 0.03);
+}
+
+function scheduleToneAt(startTime, { frequency, duration = 0.12, type = "square", volume = 0.04, slideTo = null }) {
+  if (!audio.context || !audio.master) {
+    return;
+  }
+
+  const oscillator = audio.context.createOscillator();
+  const gain = audio.context.createGain();
+
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, startTime);
+  if (slideTo) {
+    oscillator.frequency.exponentialRampToValueAtTime(slideTo, startTime + duration);
+  }
+
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  oscillator.connect(gain);
+  gain.connect(audio.master);
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration + 0.03);
+}
+
+function startBgm() {
+  ensureAudio();
+  if (!audio.context || audio.bgm.playing) {
+    return;
+  }
+
+  audio.bgm.playing = true;
+  audio.bgm.step = 0;
+  audio.bgm.nextTime = audio.context.currentTime + 0.04;
+}
+
+function stopBgm() {
+  audio.bgm.playing = false;
+}
+
+function scheduleBgm() {
+  if (!audio.context || !audio.bgm.playing) {
+    return;
+  }
+
+  const bassLine = [110, 110, 147, 147, 123, 123, 98, 98, 110, 110, 165, 165, 147, 147, 123, 123];
+  const leadLine = [220, 247, 294, 247, 220, 247, 330, 294, 262, 294, 349, 294, 262, 247, 220, 196];
+  const harmony = [165, 196, 220, 196, 165, 196, 247, 220, 196, 220, 262, 220, 196, 185, 165, 147];
+  const beat = 0.165;
+  const lookAhead = 0.72;
+
+  while (audio.bgm.nextTime < audio.context.currentTime + lookAhead) {
+    const step = audio.bgm.step % bassLine.length;
+    const startTime = audio.bgm.nextTime;
+    const bassVolume = state.running ? 0.034 : 0.018;
+    const leadVolume = state.running ? 0.024 : 0.012;
+
+    scheduleToneAt(startTime, {
+      frequency: bassLine[step],
+      duration: beat * 0.92,
+      type: "square",
+      volume: bassVolume,
+    });
+
+    if (step % 2 === 0) {
+      scheduleToneAt(startTime, {
+        frequency: leadLine[step],
+        duration: beat * 0.78,
+        type: "triangle",
+        volume: leadVolume,
+      });
+    }
+
+    if (step % 4 === 2) {
+      scheduleToneAt(startTime, {
+        frequency: harmony[step],
+        duration: beat * 0.56,
+        type: "sine",
+        volume: 0.016,
+      });
+    }
+
+    if (step % 4 === 0) {
+      scheduleToneAt(startTime, {
+        frequency: 82,
+        duration: beat * 0.12,
+        type: "square",
+        volume: 0.018,
+        slideTo: 62,
+      });
+    }
+
+    audio.bgm.step += 1;
+    audio.bgm.nextTime += beat;
+  }
 }
 
 function playEatSound(kind) {
@@ -477,6 +578,7 @@ function resetWorld() {
 function startGame() {
   ensureAudio();
   resetWorld();
+  startBgm();
   state.running = true;
   panelEl.classList.add("hidden");
 }
@@ -496,6 +598,7 @@ function gameOver() {
   state.running = false;
   state.gameOver = true;
   state.input.boosting = false;
+  stopBgm();
   playGameOverSound();
   emitBurst(state.player.x, state.player.y, state.player.size * 1.6, ["#ffffff", "#ffd3a8", "#ff8f6b"]);
   openPanel({
@@ -513,6 +616,7 @@ function winGame() {
   state.running = false;
   state.victory = true;
   state.input.boosting = false;
+  stopBgm();
   playVictorySound();
   for (let i = 0; i < 18; i += 1) {
     emitBurst(state.player.x, state.player.y, state.player.size * 1.8, ["#fff6b7", "#ffd166", "#ff89b5"]);
@@ -629,6 +733,8 @@ function createFish(kind, x = null, y = null) {
     thinkTimer: randomBetween(0.3, 1.4),
     expand: 1,
     dashTimer: randomBetween(0.5, 2.4),
+    rushTimer: 0,
+    huntStyle: kind === "shark" ? (state.nextFishId % 2 === 0 ? "cutter" : "chaser") : "wander",
     removed: false,
   };
   fish.vx = Math.cos(fish.angle) * fish.speed;
@@ -720,7 +826,7 @@ function spawnNeededEntities() {
     return;
   }
 
-  if (tier >= 3 && countByKind("tuna") < 2 + (tier - 3)) {
+  if (tier >= 3 && countByKind("tuna") < 3 + (tier - 3) * 2) {
     state.fish.push(createFish("tuna"));
   }
 }
@@ -936,10 +1042,10 @@ function chooseWanderAngle(fish, playerDistance) {
   }
 
   if (fish.kind === "tuna") {
-    if (playerDistance < 220) {
-      return Math.atan2(fish.y - state.player.y, fish.x - state.player.x) + randomBetween(-0.2, 0.2);
+    if (playerDistance < 320) {
+      return Math.atan2(fish.y - state.player.y, fish.x - state.player.x) + randomBetween(-0.14, 0.14);
     }
-    return fish.angle + randomBetween(-0.08, 0.08);
+    return fish.angle + randomBetween(-0.05, 0.05);
   }
 
   if (state.player.tier >= 5) {
@@ -951,10 +1057,13 @@ function chooseWanderAngle(fish, playerDistance) {
   }
 
   const playerSpeed = Math.hypot(state.player.vx, state.player.vy) || 1;
-  const leadFactor = clamp(playerDistance / 360, 0.55, 1.45);
+  const leadFactor = fish.huntStyle === "cutter" ? clamp(playerDistance / 260, 1.05, 2.05) : clamp(playerDistance / 420, 0.7, 1.3);
   const perpendicularX = -state.player.vy / playerSpeed;
   const perpendicularY = state.player.vx / playerSpeed;
-  const interceptOffset = (fish.id % 2 === 0 ? 1 : -1) * Math.min(180, 70 + playerDistance * 0.18);
+  const interceptOffset =
+    fish.huntStyle === "cutter"
+      ? (fish.id % 2 === 0 ? 1 : -1) * Math.min(260, 120 + playerDistance * 0.22)
+      : (fish.id % 2 === 0 ? 1 : -1) * Math.min(90, 20 + playerDistance * 0.08);
   const targetX = state.player.x + state.player.vx * leadFactor + perpendicularX * interceptOffset;
   const targetY = state.player.y + state.player.vy * leadFactor + perpendicularY * interceptOffset;
   return Math.atan2(targetY - fish.y, targetX - fish.x) + randomBetween(-0.04, 0.04);
@@ -1010,20 +1119,34 @@ function updateFish(dt) {
     fish.thinkTimer -= dt;
     if (fish.kind === "tuna") {
       fish.dashTimer -= dt;
+      fish.rushTimer = Math.max(0, fish.rushTimer - dt);
       if (fish.dashTimer <= 0) {
-        fish.speed = randomBetween(config.speedMin, config.speedMax) * 1.16;
-        fish.dashTimer = randomBetween(1.3, 2.8);
+        fish.rushTimer = randomBetween(0.55, 0.9);
+        fish.speed = randomBetween(config.speedMin, config.speedMax) * 1.42;
+        fish.angle = Math.atan2(fish.y - state.player.y, fish.x - state.player.x) + randomBetween(-0.1, 0.1);
+        fish.dashTimer = randomBetween(1.1, 2.1);
       }
     } else if (fish.kind === "shark") {
-      const rushFactor = state.player.tier >= 5 ? 1.24 : distanceToPlayer < 360 ? 1.08 : 1;
-      fish.speed = lerp(fish.speed, randomBetween(config.speedMin, config.speedMax) * rushFactor, dt * 1.1);
+      fish.rushTimer = Math.max(0, fish.rushTimer - dt);
+      if (fish.rushTimer <= 0 && distanceToPlayer < 620) {
+        fish.rushTimer = randomBetween(0.7, 1.1);
+      }
+      const rushFactor = state.player.tier >= 5 ? 1.28 : fish.rushTimer > 0 ? 1.34 : distanceToPlayer < 360 ? 1.14 : 1;
+      fish.speed = lerp(fish.speed, randomBetween(config.speedMin, config.speedMax) * rushFactor, dt * 1.45);
     } else if (fish.kind !== "shark") {
       fish.speed = lerp(fish.speed, randomBetween(config.speedMin, config.speedMax), dt * 0.35);
     }
 
     if (fish.thinkTimer <= 0 || fish.kind === "shark") {
       fish.angle = chooseWanderAngle(fish, distanceToPlayer);
-      fish.thinkTimer = fish.kind === "sardine" ? randomBetween(0.6, 1.2) : randomBetween(0.8, 1.8);
+      fish.thinkTimer =
+        fish.kind === "sardine"
+          ? randomBetween(0.6, 1.2)
+          : fish.kind === "shark"
+            ? randomBetween(0.14, 0.28)
+            : fish.kind === "tuna"
+              ? randomBetween(0.26, 0.58)
+              : randomBetween(0.8, 1.8);
     }
 
     if (fish.kind === "puffer") {
@@ -1035,7 +1158,12 @@ function updateFish(dt) {
 
     const desiredVx = Math.cos(fish.angle) * fish.speed;
     const desiredVy = Math.sin(fish.angle) * fish.speed;
-    const turnRate = fish.kind === "shark" ? 2.2 : config.turnRate;
+    const turnRate =
+      fish.kind === "shark"
+        ? (fish.huntStyle === "cutter" ? 2.55 : 3.2)
+        : fish.kind === "tuna" && fish.rushTimer > 0
+          ? 0.78
+          : config.turnRate;
 
     fish.vx = lerp(fish.vx, desiredVx, dt * turnRate);
     fish.vy = lerp(fish.vy, desiredVy, dt * turnRate);
@@ -1592,6 +1720,9 @@ function ensureAnimationLoop() {
 function resumeAfterRestore() {
   state.lastTime = performance.now();
   resizeCanvas();
+  if (state.running) {
+    startBgm();
+  }
   ensureAnimationLoop();
 }
 
@@ -1599,6 +1730,7 @@ function frame(now) {
   animationFrameId = 0;
   const dt = Math.min((now - state.lastTime) / 1000 || 0, 0.033);
   state.lastTime = now;
+  scheduleBgm();
 
   drawBackground();
 
@@ -1642,6 +1774,8 @@ window.addEventListener("focus", resumeAfterRestore);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     resumeAfterRestore();
+  } else {
+    stopBgm();
   }
 });
 
