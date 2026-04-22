@@ -171,6 +171,7 @@ const audio = {
     playing: false,
     step: 0,
     nextTime: 0,
+    mode: "calm",
   },
 };
 
@@ -271,6 +272,7 @@ function startBgm() {
 
   audio.bgm.playing = true;
   audio.bgm.step = 0;
+  audio.bgm.mode = "calm";
   audio.bgm.nextTime = audio.context.currentTime + 0.04;
 }
 
@@ -283,38 +285,61 @@ function scheduleBgm() {
     return;
   }
 
-  const bassLine = [110, 110, 147, 147, 123, 123, 98, 98, 110, 110, 165, 165, 147, 147, 123, 123];
-  const leadLine = [220, 247, 294, 247, 220, 247, 330, 294, 262, 294, 349, 294, 262, 247, 220, 196];
-  const harmony = [165, 196, 220, 196, 165, 196, 247, 220, 196, 220, 262, 220, 196, 185, 165, 147];
-  const beat = 0.165;
+  const hasSharks = state.running && countByKind("shark") > 0;
+  const nextMode = hasSharks ? "danger" : "calm";
+  if (audio.bgm.mode !== nextMode) {
+    audio.bgm.mode = nextMode;
+    audio.bgm.step = 0;
+    audio.bgm.nextTime = audio.context.currentTime + 0.04;
+  }
+
+  const patterns =
+    audio.bgm.mode === "danger"
+      ? {
+          bassLine: [82, 82, 92, 92, 87, 87, 73, 73, 82, 82, 98, 98, 92, 92, 87, 87],
+          leadLine: [165, 196, 185, 220, 196, 247, 220, 196, 185, 220, 247, 262, 247, 220, 196, 185],
+          harmony: [123, 147, 139, 165, 147, 185, 165, 147, 139, 165, 185, 196, 185, 165, 147, 139],
+          beat: 0.142,
+          bassVolume: state.running ? 0.04 : 0.02,
+          leadVolume: state.running ? 0.028 : 0.014,
+          stabVolume: 0.022,
+        }
+      : {
+          bassLine: [110, 110, 147, 147, 123, 123, 98, 98, 110, 110, 165, 165, 147, 147, 123, 123],
+          leadLine: [220, 247, 294, 247, 220, 247, 330, 294, 262, 294, 349, 294, 262, 247, 220, 196],
+          harmony: [165, 196, 220, 196, 165, 196, 247, 220, 196, 220, 262, 220, 196, 185, 165, 147],
+          beat: 0.165,
+          bassVolume: state.running ? 0.034 : 0.018,
+          leadVolume: state.running ? 0.024 : 0.012,
+          stabVolume: 0.018,
+        };
+
   const lookAhead = 0.72;
 
   while (audio.bgm.nextTime < audio.context.currentTime + lookAhead) {
-    const step = audio.bgm.step % bassLine.length;
+    const step = audio.bgm.step % patterns.bassLine.length;
     const startTime = audio.bgm.nextTime;
-    const bassVolume = state.running ? 0.034 : 0.018;
-    const leadVolume = state.running ? 0.024 : 0.012;
 
     scheduleToneAt(startTime, {
-      frequency: bassLine[step],
-      duration: beat * 0.92,
-      type: "square",
-      volume: bassVolume,
+      frequency: patterns.bassLine[step],
+      duration: patterns.beat * 0.92,
+      type: audio.bgm.mode === "danger" ? "sawtooth" : "square",
+      volume: patterns.bassVolume,
     });
 
     if (step % 2 === 0) {
       scheduleToneAt(startTime, {
-        frequency: leadLine[step],
-        duration: beat * 0.78,
-        type: "triangle",
-        volume: leadVolume,
+        frequency: patterns.leadLine[step],
+        duration: patterns.beat * 0.78,
+        type: audio.bgm.mode === "danger" ? "square" : "triangle",
+        volume: patterns.leadVolume,
       });
     }
 
     if (step % 4 === 2) {
       scheduleToneAt(startTime, {
-        frequency: harmony[step],
-        duration: beat * 0.56,
+        frequency: patterns.harmony[step],
+        duration: patterns.beat * 0.56,
         type: "sine",
         volume: 0.016,
       });
@@ -322,16 +347,26 @@ function scheduleBgm() {
 
     if (step % 4 === 0) {
       scheduleToneAt(startTime, {
-        frequency: 82,
-        duration: beat * 0.12,
+        frequency: audio.bgm.mode === "danger" ? 73 : 82,
+        duration: patterns.beat * 0.12,
         type: "square",
-        volume: 0.018,
-        slideTo: 62,
+        volume: patterns.stabVolume,
+        slideTo: audio.bgm.mode === "danger" ? 55 : 62,
+      });
+    }
+
+    if (audio.bgm.mode === "danger" && step % 8 === 4) {
+      scheduleToneAt(startTime, {
+        frequency: 294,
+        duration: patterns.beat * 0.22,
+        type: "triangle",
+        volume: 0.02,
+        slideTo: 330,
       });
     }
 
     audio.bgm.step += 1;
-    audio.bgm.nextTime += beat;
+    audio.bgm.nextTime += patterns.beat;
   }
 }
 
